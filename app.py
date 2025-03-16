@@ -170,7 +170,7 @@ try:
         )
     
     # Create tabs
-    tab1, tab2, tab3 = st.tabs(["Price Chart", "Technical Indicators", "Predictions"])
+    tab1, tab2, tab3, tab4 = st.tabs(["Price Chart", "Technical Indicators", "Predictions", "News"])
     
     with tab1:
         st.subheader("Price Chart")
@@ -689,7 +689,6 @@ try:
                             
                         except Exception as e:
                             st.error(f"Error generating Prophet-based signals: {str(e)}")
-                            st.info("The basic trading signals below may still be available.")
                         
                     except Exception as e:
                         st.error(f"Error generating forecast: {str(e) if str(e) else 'Unknown error'}")
@@ -714,90 +713,6 @@ try:
             else:
                 st.info("Click 'Generate Prophet Forecast' to create a 7-day price prediction using Facebook Prophet.")
 
-            # Original Trading signals section from data_collector
-            st.subheader("Technical Indicator Trading Signals")
-            
-            # Check if signals exist in the data
-            if 'Signal' not in data.columns:
-                st.warning("Trading signals could not be calculated. Please ensure your data has technical indicators.")
-            elif (data['Signal'] != 0).sum() == 0:
-                st.info("No trading signals detected in the current date range. Try selecting a different period or currency pair.")
-            else:
-                # Get the latest signal
-                latest_data = data.iloc[-1]
-                signal = latest_data['Signal']
-                confidence = latest_data['Confidence']
-                
-                # Display current trading signal
-                if signal != 0 and confidence >= 0.8:
-                    signal_type = "BUY 🟢" if signal == 1 else "SELL 🔴"
-                    st.success(f"### Strong {signal_type} Signal Detected!")
-                    
-                    # Display entry and exit points
-                    col1, col2, col3 = st.columns(3)
-                    with col1:
-                        st.metric(
-                            "Entry Price",
-                            f"{latest_data['Entry_Price']:.4f}",
-                            help="Recommended entry price for the trade"
-                        )
-                    with col2:
-                        st.metric(
-                            "Take Profit",
-                            f"{latest_data['Take_Profit']:.4f}",
-                            delta=f"{(latest_data['Take_Profit'] - latest_data['Entry_Price']):.4f}",
-                            help="Recommended take profit level"
-                        )
-                    with col3:
-                        st.metric(
-                            "Stop Loss",
-                            f"{latest_data['Stop_Loss']:.4f}",
-                            delta=f"{(latest_data['Stop_Loss'] - latest_data['Entry_Price']):.4f}",
-                            help="Recommended stop loss level"
-                        )
-                    
-                    # Display confidence and risk metrics
-                    st.info(f"Signal Confidence: {confidence:.1%}")
-                    
-                    # Calculate risk-reward ratio
-                    if signal == 1:  # Buy signal
-                        risk = latest_data['Entry_Price'] - latest_data['Stop_Loss']
-                        reward = latest_data['Take_Profit'] - latest_data['Entry_Price']
-                    else:  # Sell signal
-                        risk = latest_data['Stop_Loss'] - latest_data['Entry_Price']
-                        reward = latest_data['Entry_Price'] - latest_data['Take_Profit']
-                    
-                    risk_reward = abs(reward / risk) if risk != 0 else 0
-                    st.metric("Risk-Reward Ratio", f"{risk_reward:.2f}", help="Ratio of potential reward to risk")
-                    
-                    # Trading checklist
-                    st.markdown("### Pre-Trade Checklist")
-                    checklist = """
-                    - [ ] Check current market conditions
-                    - [ ] Verify position size based on risk management
-                    - [ ] Set stop loss and take profit orders
-                    - [ ] Check for upcoming news events
-                    - [ ] Ensure sufficient margin/balance
-                    """
-                    st.markdown(checklist)
-                else:
-                    st.warning("No high-confidence trading signals at the moment. Wait for better opportunities.")
-                
-                # Display signal history
-                st.subheader("Recent Signals")
-                signal_history = data[data['Signal'] != 0].tail(5)[['Signal', 'Confidence', 'Entry_Price', 'Take_Profit', 'Stop_Loss']]
-                if not signal_history.empty:
-                    signal_history['Signal'] = signal_history['Signal'].map({1: 'BUY 🟢', -1: 'SELL 🔴'})
-                    signal_history['Confidence'] = signal_history['Confidence'].map('{:.1%}'.format)
-                    st.dataframe(signal_history)
-                else:
-                    st.info("No recent trading signals in the selected period.")
-                
-                # Add refresh button
-                if st.button("🔄 Refresh Signals"):
-                    st.cache_data.clear()
-                    st.rerun()
-
 except Exception as e:
     st.error(f"Error: {str(e)}")
 
@@ -807,4 +722,217 @@ st.markdown("""
 <div style='text-align: center'>
     <p>Data provided by Alpha Vantage | Built with Streamlit</p>
 </div>
-""", unsafe_allow_html=True) 
+""", unsafe_allow_html=True)
+
+with tab4:
+    st.subheader("Latest Forex News")
+    
+    # Fetch news data with caching - using News API instead of Alpha Vantage
+    @st.cache_data(ttl=1800)  # Cache for 30 minutes
+    def get_news(pair, max_results=15):
+        """Fetch forex news from News API (newsapi.org) specifically relevant to the selected currency pair."""
+        try:
+            # Split the pair into base and quote currencies
+            base, quote = pair.split('/')
+            
+            # Load environment variables
+            import os
+            from dotenv import load_dotenv
+            import requests
+            
+            load_dotenv()
+            news_api_key = os.getenv('NEWS_API_KEY')
+            
+            if not news_api_key:
+                st.warning("NEWS_API_KEY not found in environment variables. Please add it to your .env file.")
+                st.info("You can get a free API key from https://newsapi.org/")
+                return pd.DataFrame()
+                
+            # Create a request to News API
+            url = "https://newsapi.org/v2/everything"
+            
+            # Create targeted query for the specific forex pair
+            # Format: EURUSD and "EUR/USD" are both included for better relevance
+            pair_code = f"{base}{quote}"  # e.g., EURUSD
+            
+            # Create dictionary of currency-specific keywords
+            currency_keywords = {
+                'EUR': ['euro', 'eurozone', 'ECB', 'European Central Bank'],
+                'USD': ['dollar', 'USD', 'Federal Reserve', 'Fed', 'FOMC'],
+                'GBP': ['pound sterling', 'pound', 'Bank of England', 'BOE', 'UK economy'],
+                'JPY': ['yen', 'Bank of Japan', 'BOJ', 'Japanese economy'],
+                'CHF': ['Swiss franc', 'SNB', 'Swiss National Bank'],
+                'AUD': ['Australian dollar', 'Aussie dollar', 'RBA', 'Reserve Bank of Australia'],
+                'CAD': ['Canadian dollar', 'loonie', 'Bank of Canada', 'BOC'],
+                'NZD': ['New Zealand dollar', 'kiwi', 'RBNZ', 'Reserve Bank of New Zealand']
+            }
+            
+            # Get keywords for base and quote currencies
+            base_keywords = currency_keywords.get(base, [])
+            quote_keywords = currency_keywords.get(quote, [])
+            
+            # Build a comprehensive search query
+            # Include the pair code, formal notation, and currency-specific terms
+            search_query = (
+                f'"{pair}" OR "{base}/{quote}" OR {pair_code} OR '
+                f'({base} AND {quote} AND (forex OR "exchange rate" OR "currency pair" OR trading OR '
+                f'"currency exchange" OR market OR "foreign exchange"))'
+            )
+            
+            # Add currency-specific terms if available
+            if base_keywords and quote_keywords:
+                specific_terms = ' OR '.join([f'({b} AND {q})' for b in base_keywords for q in quote_keywords[:2]])
+                search_query += f' OR ({specific_terms})'
+            
+            # Create the params for the API request
+            params = {
+                "apiKey": news_api_key,
+                "q": search_query,
+                "language": "en",
+                "sortBy": "publishedAt",
+                "pageSize": max_results
+            }
+            
+            # Log the search query for debugging
+            print(f"Searching for news with query: {search_query}")
+            
+            # Make the API request
+            response = requests.get(url, params=params)
+            data = response.json()
+            
+            # Check if we got valid data
+            if data.get("status") == "ok" and "articles" in data:
+                # Extract articles
+                articles = data["articles"]
+                
+                if not articles:
+                    st.info(f"No news articles found for {pair}.")
+                    return pd.DataFrame()
+                    
+                # Extract relevant fields from each news item
+                news_list = []
+                for article in articles[:max_results]:
+                    # Import TextBlob for simple sentiment analysis if available
+                    try:
+                        from textblob import TextBlob
+                        # Perform basic sentiment analysis on title and description
+                        text = f"{article.get('title', '')} {article.get('description', '')}"
+                        analysis = TextBlob(text)
+                        # TextBlob sentiment: polarity is between -1 (negative) and 1 (positive)
+                        sentiment = analysis.sentiment.polarity
+                    except ImportError:
+                        # If TextBlob is not available, use neutral sentiment
+                        sentiment = 0
+                    
+                    news_list.append({
+                        'title': article.get('title', 'No title'),
+                        'summary': article.get('description', 'No summary'),
+                        'url': article.get('url', '#'),
+                        'source': article.get('source', {}).get('name', 'Unknown'),
+                        'published_at': article.get('publishedAt', None),
+                        'sentiment': sentiment
+                    })
+                
+                # Convert to DataFrame
+                news_df = pd.DataFrame(news_list)
+                if not news_df.empty and 'published_at' in news_df.columns:
+                    news_df['published_at'] = pd.to_datetime(news_df['published_at'], errors='coerce')
+                    news_df = news_df.sort_values('published_at', ascending=False)
+                
+                return news_df
+            else:
+                # Handle errors
+                error_message = data.get("message", "Unknown error")
+                if "apiKey" in error_message:
+                    st.error(f"News API error: Invalid API key or exceeded request limit")
+                else:
+                    st.error(f"News API error: {error_message}")
+                return pd.DataFrame()
+                
+        except Exception as e:
+            st.error(f"Error fetching news: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return pd.DataFrame()
+    
+    with st.spinner(f"Fetching latest news for {selected_pair}..."):
+        news_df = get_news(selected_pair)
+    
+    if news_df.empty:
+        st.warning(f"No news articles found specifically for {selected_pair}.")
+        
+        # Show alternative news sources
+        st.info(f"""
+        ### Alternative News Sources for {selected_pair}
+        
+        Check these financial news websites for the latest forex news:
+        
+        - [Forex Factory](https://www.forexfactory.com/releasesraw?currency={selected_pair.replace('/', '')})
+        - [FXStreet](https://www.fxstreet.com/currencies/{selected_pair.lower().replace('/', '')})
+        - [DailyFX](https://www.dailyfx.com/{selected_pair.lower().replace('/', '')})
+        - [Investing.com Forex News](https://www.investing.com/currencies/{selected_pair.lower().replace('/', '-')})
+        - [Bloomberg Markets](https://www.bloomberg.com/markets/currencies)
+        """)
+    else:
+        # Display number of articles found
+        st.info(f"Found {len(news_df)} news articles related to {selected_pair}")
+        
+        # Show news articles
+        for i, row in news_df.iterrows():
+            with st.expander(f"{row['title']} ({row['source']})"):
+                # Display publication date if available
+                if 'published_at' in row and pd.notna(row['published_at']):
+                    st.caption(f"Published: {row['published_at'].strftime('%Y-%m-%d %H:%M:%S')}")
+                
+                # Display summary
+                st.write(row['summary'])
+                
+                # Display sentiment if available
+                if 'sentiment' in row and pd.notna(row['sentiment']):
+                    sentiment = float(row['sentiment'])
+                    if abs(sentiment) > 0.001:  # Only show if there's a non-zero sentiment
+                        sentiment_color = "green" if sentiment > 0.1 else "red" if sentiment < -0.1 else "gray"
+                        sentiment_label = "Bullish" if sentiment > 0.1 else "Bearish" if sentiment < -0.1 else "Neutral"
+                        st.markdown(f"**Sentiment:** <span style='color:{sentiment_color}'>{sentiment_label} ({sentiment:.2f})</span>", unsafe_allow_html=True)
+                
+                # Display link to full article
+                st.markdown(f"[Read full article]({row['url']})")
+        
+        # Add information about sentiment analysis
+        with st.expander("About News Sentiment Analysis"):
+            st.markdown("""
+            ### Understanding News Sentiment
+            
+            The sentiment score indicates how positive or negative the article's content is regarding the currency pair:
+            
+            - **Positive scores** (above 0.1) suggest bullish sentiment
+            - **Negative scores** (below -0.1) suggest bearish sentiment
+            - **Neutral scores** (between -0.1 and 0.1) suggest balanced or neutral reporting
+            
+            Sentiment is calculated using TextBlob's natural language processing capabilities, analyzing the title and summary of each article.
+            
+            Note: Automated sentiment analysis is not always accurate for complex financial news. Always read the full article and conduct your own analysis.
+            """)
+        
+        # Add refresh button for news
+        if st.button("🔄 Refresh News"):
+            st.cache_data.clear()
+            st.experimental_rerun()
+        
+        # Add instructions for setting up NEWS_API_KEY
+        with st.expander("News API Setup Instructions"):
+            st.markdown("""
+            ### How to Set Up News API
+
+            1. Visit [News API](https://newsapi.org/) and sign up for a free API key
+            2. Add your API key to your `.env` file:
+            ```
+            NEWS_API_KEY=your_api_key_here
+            ```
+            3. Restart the application
+
+            With the free tier, you can make 100 requests per day and access news from the past month.
+            """)
+            
+        # Add a disclaimer
+        st.caption(f"News data for {selected_pair} provided by News API (newsapi.org)") 

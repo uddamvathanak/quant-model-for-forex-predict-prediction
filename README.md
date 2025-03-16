@@ -10,6 +10,7 @@ This project implements a comprehensive dashboard for forex price movement analy
 - Technical indicators: RSI, MACD, Bollinger Bands
 - Trading signals generation with confidence levels
 - Prophet-enhanced trading signals with entry, take profit and stop loss
+- Currency-specific news with sentiment analysis via News API
 - Advanced data visualization with Plotly
 - Data download as CSV
 - Easy one-click forecasting
@@ -22,6 +23,8 @@ This project implements a comprehensive dashboard for forex price movement analy
 - Facebook Prophet
 - Plotly
 - Alpha Vantage API key
+- News API key (for the news feature)
+- TextBlob (optional, for enhanced sentiment analysis)
 
 ## Installation
 
@@ -36,12 +39,20 @@ cd quant-model-for-forex-predict-prediction
 pip install -r requirements.txt
 ```
 
-3. Create a `.env` file with your Alpha Vantage API key:
-```
-ALPHA_VANTAGE_API_KEY=your_api_key_here
+3. Install TextBlob for sentiment analysis (optional but recommended):
+```bash
+pip install textblob
+python -m textblob.download_corpora
 ```
 
-You can get a free API key from [Alpha Vantage](https://www.alphavantage.co/support/#api-key).
+4. Create a `.env` file with your API keys:
+```
+ALPHA_VANTAGE_API_KEY=your_alpha_vantage_key_here
+NEWS_API_KEY=your_news_api_key_here
+```
+
+You can get a free Alpha Vantage API key from [Alpha Vantage](https://www.alphavantage.co/support/#api-key).
+You can get a free News API key from [News API](https://newsapi.org/register).
 
 ## Usage
 
@@ -76,14 +87,6 @@ The dashboard uses Facebook Prophet for time series forecasting with these featu
 ### 4. Trading Signals
 The application offers two types of trading signals:
 
-#### Technical Indicator Signals
-- Based on RSI, MACD, and Bollinger Bands
-- Entry price recommendations derived from current price levels
-- Take profit and stop loss levels calculated using ATR (Average True Range)
-- Confidence metrics for each signal
-- Risk-reward ratio calculations
-- Signal history tracking
-
 #### Prophet-Enhanced Trading Signals
 - Combines technical indicators with Prophet forecasts
 - Entry, take profit, and stop loss levels optimized by forecast data
@@ -91,6 +94,32 @@ The application offers two types of trading signals:
 - Signal confidence metrics that factor in both technical and forecast data
 - Detailed signal analysis comparing technical and forecast indicators
 - Enhanced pre-trade checklist
+
+### 5. Forex News
+The dashboard includes a currency pair-specific news feed with the following features:
+- Latest news articles specifically relevant to the selected currency pair
+- Intelligent search queries that incorporate currency-specific keywords and central banks
+- Advanced sentiment analysis using natural language processing (via TextBlob)
+- Color-coded sentiment indicators (bullish, bearish, neutral) with numerical scores
+- Direct links to full articles and publication metadata
+- Pair-specific alternative news sources with custom links
+- Cached results to minimize API usage (refreshes every 30 minutes)
+
+## News API Integration
+
+The news feature uses News API to fetch currency pair-specific news:
+
+### How It Works
+1. **Targeted Search Queries**: Intelligent queries that combine currency codes, names, related terms and central banks
+2. **Sentiment Analysis**: TextBlob analyzes article titles and summaries to determine sentiment
+3. **Currency-Specific Content**: News is filtered to be relevant to the selected pair
+4. **Caching**: Results are cached for 30 minutes to prevent excessive API calls
+
+### News API Features
+- **Free Tier**: 100 requests per day
+- **Real-time News**: Access to thousands of news sources
+- **Rich Metadata**: Publication dates, sources, and descriptions
+- **Multiple Languages**: Support for multiple languages (English is default)
 
 ## Facebook Prophet Model
 
@@ -115,27 +144,31 @@ The implementation uses Facebook Prophet's time series forecasting capabilities:
 2. **Choose the Right Currency Pair**: Some pairs have more predictable patterns
 3. **Consider Timeframe**: Daily data usually works best with Prophet
 4. **Check Technical Indicators**: Use indicators alongside forecasts for confirmation
+5. **Review Related News**: Check the news tab for market-moving events
 
 ## API Usage Notes
 
-- Alpha Vantage free tier allows 5 API calls per minute
-- Daily limit of 500 API calls
-- Data for most major currency pairs is available
+- Alpha Vantage free tier allows 5 API calls per minute (500 daily)
+- News API free tier allows 100 requests per day
+- News data is cached for 30 minutes to minimize API usage
 
 ## Limitations
 
 - Forecasts are based on historical patterns and may not predict unexpected events
 - The free Alpha Vantage API has rate limits
 - Intraday data is limited to the most recent periods
+- News API free tier limits access to the past month of articles
+- Automated sentiment analysis may not capture complex financial contexts
 
 ## Future Enhancements
 
 Potential future enhancements could include:
 - Support for more technical indicators
-- Integration with news sentiment analysis
+- Integration with additional news sources
 - Backtesting of trading strategies
 - Portfolio optimization
 - Real-time alerts for trading signals
+- Advanced NLP for better news sentiment accuracy
 
 ## License
 
@@ -144,5 +177,7 @@ Potential future enhancements could include:
 ## Acknowledgements
 
 - Alpha Vantage for providing the forex data API
+- News API for providing news data
 - Facebook for the Prophet forecasting library
 - Streamlit for the interactive dashboard framework
+- TextBlob for natural language processing

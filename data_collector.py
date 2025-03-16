@@ -189,29 +189,86 @@ class ForexDataCollector:
             
         return data
     
-    def fetch_news_data(self, query=None):
+    def fetch_news_data(self, query=None, max_results=10):
         """
-        Fetch relevant news articles
+        Fetch relevant news articles using Alpha Vantage News API
+        
+        Parameters:
+        -----------
+        query : str, optional
+            The search query for news articles. If None, uses the currency pair.
+        max_results : int, optional
+            Maximum number of news articles to return (default: 10)
+        
+        Returns:
+        --------
+        pd.DataFrame
+            DataFrame with news articles
         """
-        if query is None:
-            query = f"{self.base_currency}/{self.quote_currency} OR {self.base_currency} {self.quote_currency} forex"
-            
         try:
-            news = self.news_api.get_everything(
-                q=query,
-                language='en',
-                sort_by='relevancy',
-                page_size=100
-            )
+            # Set default query if not provided
+            if query is None:
+                # Format the query for better results: EUR/USD -> "EUR USD forex"
+                query = f"{self.base_currency} {self.quote_currency} forex"
             
-            news_df = pd.DataFrame(news['articles'])
-            news_df['publishedAt'] = pd.to_datetime(news_df['publishedAt'])
-            news_df = news_df.set_index('publishedAt')
+            # Make sure max_results is an integer to avoid type issues    
+            try:
+                max_results = int(max_results)
+            except (ValueError, TypeError):
+                print(f"Warning: Invalid max_results value ({max_results}), using default of 10")
+                max_results = 10
+                
+            # Try to use Alpha Vantage's news API if available
+            url = "https://www.alphavantage.co/query"
+            params = {
+                "function": "NEWS_SENTIMENT",
+                "tickers": f"FOREX:{self.base_currency}{self.quote_currency}",
+                "apikey": self.alpha_vantage_key,
+                "sort": "RELEVANCE",
+                "limit": max_results
+            }
             
-            return news_df
+            # Print debugging information
+            print(f"Fetching news with query: {query}, max_results: {max_results}")
+            print(f"API request params: {params}")
             
+            # Make the API request
+            response = requests.get(url, params=params)
+            data = response.json()
+            
+            # Check if we got valid data
+            if "feed" in data:
+                # Extract relevant fields from each news item
+                news_list = []
+                for item in data["feed"][:max_results]:
+                    news_list.append({
+                        'title': item.get('title', 'No title'),
+                        'summary': item.get('summary', 'No summary'),
+                        'url': item.get('url', '#'),
+                        'source': item.get('source', 'Unknown'),
+                        'published_at': item.get('time_published', None),
+                        'sentiment': item.get('overall_sentiment_score', 0)
+                    })
+                
+                # Convert to DataFrame
+                news_df = pd.DataFrame(news_list)
+                if not news_df.empty and 'published_at' in news_df.columns:
+                    news_df['published_at'] = pd.to_datetime(news_df['published_at'], format='%Y%m%dT%H%M%S', errors='coerce')
+                    news_df = news_df.sort_values('published_at', ascending=False)
+                
+                print(f"Successfully fetched {len(news_list)} news articles")
+                return news_df
+            else:
+                # If Alpha Vantage news isn't available, try a fallback approach
+                print("Alpha Vantage News API not available or no results. Using alternative news source.")
+                if "Note" in data:
+                    print(f"API response note: {data['Note']}")
+                return pd.DataFrame()
+                
         except Exception as e:
             print(f"Error fetching news: {str(e)}")
+            import traceback
+            traceback.print_exc()
             return pd.DataFrame()
     
     def save_to_database(self, data, table_name='forex_data'):
