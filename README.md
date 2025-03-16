@@ -1,68 +1,27 @@
-# Forex Price Movement Prediction Model
+# Forex Price Movement Prediction Dashboard
 
-This project implements a machine learning model for predicting forex price movements using technical indicators and the LightGBM algorithm.
+This project implements a comprehensive dashboard for forex price movement analysis and prediction using Alpha Vantage data and Facebook Prophet time series forecasting.
 
 ## Features
 
-- Historical data fetching using Yahoo Finance
-- Comprehensive technical indicator generation
-- Advanced feature engineering
-- Hyperparameter optimization using Optuna
-- Model evaluation and visualization
-- Easy-to-use API for predictions
+- Historical forex data fetching using Alpha Vantage API
+- Interactive Streamlit dashboard with technical indicators
+- Time series forecasting using Facebook Prophet
+- Technical indicators: RSI, MACD, Bollinger Bands
+- Trading signals generation with confidence levels
+- Prophet-enhanced trading signals with entry, take profit and stop loss
+- Advanced data visualization with Plotly
+- Data download as CSV
+- Easy one-click forecasting
 
 ## Prerequisites
 
-### 1. Install Miniconda
-
-First, you need to install Miniconda, which is a minimal installer for Conda.
-
-#### Windows:
-1. Download the Miniconda installer for Windows from [here](https://docs.conda.io/en/latest/miniconda.html)
-2. Run the installer (`.exe` file)
-3. Follow the installation prompts
-4. Open "Anaconda Prompt (Miniconda3)" from the Start Menu to verify installation
-
-#### macOS/Linux:
-1. Download the Miniconda installer:
-```bash
-# macOS
-curl -O https://repo.anaconda.com/miniconda/Miniconda3-latest-MacOSX-x86_64.sh
-
-# Linux
-curl -O https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
-```
-
-2. Run the installer:
-```bash
-# macOS
-bash Miniconda3-latest-MacOSX-x86_64.sh
-
-# Linux
-bash Miniconda3-latest-Linux-x86_64.sh
-```
-
-3. Follow the installation prompts
-4. Restart your terminal or run:
-```bash
-source ~/.bashrc  # Linux
-source ~/.zshrc   # macOS
-```
-
-### 2. Create and Activate Virtual Environment
-
-After installing Miniconda, create and activate a new virtual environment:
-
-```bash
-# Create new environment named 'forex_env' with Python 3.9
-conda create -n forex_env python=3.9
-
-# Activate the environment
-conda activate forex_env
-
-# Verify Python installation
-python --version
-```
+- Python 3.9+
+- Streamlit
+- Pandas
+- Facebook Prophet
+- Plotly
+- Alpha Vantage API key
 
 ## Installation
 
@@ -77,246 +36,113 @@ cd quant-model-for-forex-predict-prediction
 pip install -r requirements.txt
 ```
 
-3. Install TA-Lib (Technical Analysis Library):
-
-**Recommended Method (All Platforms)**
-```bash
-conda install -c conda-forge ta-lib
+3. Create a `.env` file with your Alpha Vantage API key:
 ```
-This is the easiest and most reliable method for all operating systems (Windows, macOS, and Linux).
-
-If the above method doesn't work, you can try the platform-specific methods below:
-
-#### Windows Alternative Methods:
-**Method 1: Using Pre-compiled Wheels**
-1. Download the appropriate wheel file for your Python version:
-   - For Python 3.9 64-bit: [TA_Lib‑0.4.24‑cp39‑cp39‑win_amd64.whl](https://download.lfd.uci.edu/pythonlibs/archived/TA_Lib-0.4.24-cp39-cp39-win_amd64.whl)
-   - For other versions, visit [Unofficial Windows Binaries](https://www.lfd.uci.edu/~gohlke/pythonlibs/#ta-lib)
-
-2. Install the downloaded wheel file:
-```bash
-# Navigate to the download directory
-cd path/to/download/directory
-
-# Install the wheel file
-pip install TA_Lib‑0.4.24‑cp39‑cp39‑win_amd64.whl
+ALPHA_VANTAGE_API_KEY=your_api_key_here
 ```
 
-**Method 2: Building from Source**
-If Method 1 doesn't work, you can build from source:
-
-1. Install Visual Studio Build Tools:
-   - Download [Visual Studio Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/)
-   - Run the installer
-   - Select "Desktop development with C++"
-   - Make sure to include "Windows 10 SDK" and "MSVC v140"
-
-2. Download and Install TA-Lib:
-   - Download [ta-lib-0.4.0-msvc.zip](http://prdownloads.sourceforge.net/ta-lib/ta-lib-0.4.0-msvc.zip)
-   - Unzip to `C:\ta-lib`
-   - Open "x64 Native Tools Command Prompt for VS 2022" (or your VS version)
-   - Run:
-   ```bash
-   cd C:\ta-lib
-   lib /machine:x64 /def:c:\ta-lib\ta-lib.def
-   ```
-
-3. Set up environment variables:
-   - Open System Properties → Advanced → Environment Variables
-   - Add to System Variables:
-     - Variable: `LIB`
-     - Value: `C:\ta-lib\lib`
-   - Add to Path:
-     - `C:\ta-lib\bin`
-
-4. Finally, install TA-Lib for Python:
-```bash
-pip install ta-lib
-```
-
-If you encounter the error "Cannot find ta-lib library", try these steps:
-1. Make sure you've completed all steps above
-2. Try installing an older version:
-```bash
-pip install ta-lib==0.4.21
-```
-3. If still having issues, try:
-```bash
-conda install -c conda-forge ta-lib
-```
-
-#### macOS Alternative Method:
-```bash
-# Using Homebrew
-brew install ta-lib
-pip install ta-lib
-```
-
-#### Linux Alternative Method:
-```bash
-# Install dependencies
-wget http://prdownloads.sourceforge.net/ta-lib/ta-lib-0.4.0-src.tar.gz
-tar -xzf ta-lib-0.4.0-src.tar.gz
-cd ta-lib/
-./configure --prefix=/usr
-make
-sudo make install
-pip install ta-lib
-```
-
-## Environment Setup
-
-1. Copy the example environment file to create your own `.env` file:
-```bash
-# Windows
-copy .env.example .env
-
-# macOS/Linux
-cp .env.example .env
-```
-
-2. Open the `.env` file in your text editor and update the values:
-```ini
-# Required: Get your API key from https://newsapi.org
-NEWS_API_KEY=your_news_api_key_here
-
-# Optional: Modify these parameters as needed
-DATABASE_URL=sqlite:///forex_data.db
-PREDICTION_HORIZON=1
-CONFIDENCE_THRESHOLD=0.7
-HISTORICAL_DATA_DAYS=30
-
-# Technical Analysis Parameters
-ATR_PERIOD=14
-VWAP_PERIOD=5
-BREAKOUT_WINDOW=20
-
-# Trading Parameters
-TP_MULTIPLIER=1.5
-SL_MULTIPLIER=1.0
-```
-
-The most important setting is the `NEWS_API_KEY`. You can get one by:
-1. Go to [https://newsapi.org](https://newsapi.org)
-2. Sign up for a free account
-3. Copy your API key from the dashboard
-4. Paste it in the `.env` file
-
-Other parameters can be left at their default values or adjusted based on your trading preferences:
-- `PREDICTION_HORIZON`: Number of periods to predict ahead
-- `CONFIDENCE_THRESHOLD`: Minimum confidence required for trading signals (0.0 to 1.0)
-- `HISTORICAL_DATA_DAYS`: Days of historical data to use for training
-- `ATR_PERIOD`: Period for Average True Range calculation
-- `VWAP_PERIOD`: Period for Volume Weighted Average Price calculation
-- `TP_MULTIPLIER`: Take Profit multiplier relative to ATR
-- `SL_MULTIPLIER`: Stop Loss multiplier relative to ATR
+You can get a free API key from [Alpha Vantage](https://www.alphavantage.co/support/#api-key).
 
 ## Usage
 
-### Quick Start
-
-1. Activate the virtual environment:
+Run the Streamlit dashboard:
 ```bash
-conda activate forex_env
+streamlit run app.py
 ```
 
-2. Start the FastAPI backend:
-```bash
-python api.py
-```
+This will launch the forex prediction dashboard in your browser.
 
-3. In a new terminal (with forex_env activated), start the Streamlit dashboard:
-```bash
-streamlit run dashboard.py
-```
+## Dashboard Features
 
-This will:
-1. Download EUR/USD historical data
-2. Create technical indicators
-3. Train a model with optimized hyperparameters
-4. Evaluate the model performance
-5. Generate a visualization of predictions
-6. Save the trained model
+### 1. Data Selection and Visualization
+- Select currency pairs (EUR/USD, GBP/USD, etc.)
+- Choose date range (up to 2 years of historical data)
+- View candlestick charts and price statistics
 
-### Using the ForexPredictor Class
+### 2. Technical Indicators
+- **RSI (Relative Strength Index)**: Helps identify overbought or oversold conditions
+- **MACD (Moving Average Convergence Divergence)**: Shows momentum trends
+- **Bollinger Bands**: Display volatility and potential price breakouts
 
-```python
-from forex_predictor import ForexPredictor
+### 3. Price Forecasting with Facebook Prophet
+The dashboard uses Facebook Prophet for time series forecasting with these features:
 
-# Initialize predictor
-predictor = ForexPredictor(currency_pair="EURUSD=X", prediction_horizon=1)
+- **Price Selection**: Choose which price to forecast (Open, High, Low, Close)
+- **Simplified Model**: Uses only the essential price data for reliable forecasting
+- **7-Day Forecast**: Provides a week-ahead price prediction with confidence intervals
+- **Forecast Metrics**: Displays current price, predicted price, and confidence level
+- **Interactive Charts**: Visualize historical data alongside forecasts
 
-# Fetch and prepare data
-data = predictor.fetch_data(start_date="2020-01-01")
-data_with_features = predictor.create_features(data)
-X_train, X_test, y_train, y_test = predictor.prepare_data(data_with_features)
+### 4. Trading Signals
+The application offers two types of trading signals:
 
-# Train model
-predictor.train(X_train, y_train, optimize=True)
+#### Technical Indicator Signals
+- Based on RSI, MACD, and Bollinger Bands
+- Entry price recommendations derived from current price levels
+- Take profit and stop loss levels calculated using ATR (Average True Range)
+- Confidence metrics for each signal
+- Risk-reward ratio calculations
+- Signal history tracking
 
-# Make predictions
-predictions = predictor.predict(X_test)
+#### Prophet-Enhanced Trading Signals
+- Combines technical indicators with Prophet forecasts
+- Entry, take profit, and stop loss levels optimized by forecast data
+- Directional probability based on forecast confidence intervals
+- Signal confidence metrics that factor in both technical and forecast data
+- Detailed signal analysis comparing technical and forecast indicators
+- Enhanced pre-trade checklist
 
-# Evaluate performance
-metrics = predictor.evaluate(X_test, y_test)
-print(metrics)
+## Facebook Prophet Model
 
-# Save model
-predictor.save_model('my_model.joblib')
-```
+The implementation uses Facebook Prophet's time series forecasting capabilities:
 
-## Model Details
+### How It Works
+1. **Data Preparation**: Historical price data is cleaned and formatted for Prophet
+2. **Model Training**: Prophet identifies patterns in the data, including:
+   - Trend component
+   - Seasonality (daily, weekly, yearly)
+   - Holiday effects
+3. **Forecasting**: The model generates predictions with uncertainty intervals
 
-The model uses the following components:
+### Model Features
+- **Simplified Input**: Uses a single price column (Close, Open, High, or Low)
+- **Robust Data Handling**: Automatically handles missing values and outliers
+- **Confidence Intervals**: Shows prediction uncertainty
 
-1. **Data Collection**: Historical forex data from Yahoo Finance
-2. **Feature Engineering**:
-   - Technical indicators (momentum, trend, volatility, volume)
-   - Price action patterns
-   - Custom features based on market behavior
+## Best Practices for Accurate Forecasts
 
-3. **Model Architecture**:
-   - LightGBM Regressor
-   - Hyperparameter optimization using Optuna
-   - Standardized features
+1. **Use Sufficient Data**: Select at least 60 days of historical data
+2. **Choose the Right Currency Pair**: Some pairs have more predictable patterns
+3. **Consider Timeframe**: Daily data usually works best with Prophet
+4. **Check Technical Indicators**: Use indicators alongside forecasts for confirmation
 
-4. **Evaluation Metrics**:
-   - RMSE (Root Mean Square Error)
-   - R² Score
+## API Usage Notes
 
-## Customization
+- Alpha Vantage free tier allows 5 API calls per minute
+- Daily limit of 500 API calls
+- Data for most major currency pairs is available
 
-You can customize the model by:
+## Limitations
 
-1. Modifying the currency pair:
-```python
-predictor = ForexPredictor(currency_pair="GBPUSD=X")
-```
+- Forecasts are based on historical patterns and may not predict unexpected events
+- The free Alpha Vantage API has rate limits
+- Intraday data is limited to the most recent periods
 
-2. Changing the prediction horizon:
-```python
-predictor = ForexPredictor(prediction_horizon=5)  # 5-day ahead prediction
-```
+## Future Enhancements
 
-3. Adjusting hyperparameter optimization:
-```python
-predictor.train(X_train, y_train, optimize=True, n_trials=100)
-```
+Potential future enhancements could include:
+- Support for more technical indicators
+- Integration with news sentiment analysis
+- Backtesting of trading strategies
+- Portfolio optimization
+- Real-time alerts for trading signals
 
-## Troubleshooting
+## License
 
-1. If you encounter issues with TA-Lib installation:
-   - Windows: Download the appropriate wheel file from [here](https://www.lfd.uci.edu/~gohlke/pythonlibs/#ta-lib)
-   - Linux: Make sure you have build essentials installed: `sudo apt-get install build-essential`
+[MIT License](LICENSE)
 
-2. If you get a "ModuleNotFoundError":
-   - Make sure you're in the correct virtual environment: `conda activate forex_env`
-   - Verify all packages are installed: `pip list`
+## Acknowledgements
 
-3. If the API fails to start:
-   - Check if the port 8000 is available
-   - Verify your NEWS_API_KEY in the .env file
-
-## Disclaimer
-
-This model is for educational purposes only. Trading forex carries significant risks, and past performance does not guarantee future results. Always conduct thorough research and consider consulting with financial advisors before making trading decisions.
+- Alpha Vantage for providing the forex data API
+- Facebook for the Prophet forecasting library
+- Streamlit for the interactive dashboard framework

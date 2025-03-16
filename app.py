@@ -119,38 +119,21 @@ def fetch_data(pair, timeframe, start_date, end_date):
             st.error("No data returned from API for the selected date range.")
             return pd.DataFrame()
             
-        # Data validation and cleanup
-        # First, print data types to check if 'Close' is actually a numeric column
-        print(f"Data types before validation: {data.dtypes}")
+        # Add breakouts for signal generation
+        try:
+            data = collector.detect_breakouts(data)
+            print("Breakout detection completed successfully")
+        except Exception as breakout_error:
+            print(f"Warning: Could not detect breakouts: {str(breakout_error)}")
+            # Continue without breakouts - they'll be handled in the signal generation
         
-        # Check if Close column is numeric - if not, try to convert
-        if not pd.api.types.is_numeric_dtype(data['Close']):
-            print(f"Close column is not numeric. Attempting to convert. Sample values: {data['Close'].head()}")
-            # Try to convert to numeric, coercing errors to NaN
-            data['Close'] = pd.to_numeric(data['Close'], errors='coerce')
-        
-        # Log data quality after ensuring column is numeric
-        nan_count = data['Close'].isna().sum()
-        if nan_count > 0:
-            print(f"Warning: {nan_count} NaN values found in Close column")
-            # Show some examples of rows with NaN values for debugging
-            if nan_count > 0:
-                nan_indices = data.index[data['Close'].isna()]
-                print(f"First 5 indices with NaN in Close: {nan_indices[:5]}")
-                if len(nan_indices) > 0:
-                    print(f"Sample rows with NaN Close values:\n{data.loc[nan_indices[:5]]}")
-            
-            if nan_count > len(data) / 2:
-                st.warning(f"Data quality issue: {nan_count} missing values out of {len(data)} data points.")
+        # Debug information
+        print(f"Data fetched successfully with {len(data)} rows")
+        print(f"Columns: {data.columns.tolist()}")
         
         return data
-    except ValueError as e:
-        st.error(f"Error: {str(e)}")
-        if "API limit" in str(e):
-            st.warning("Please wait a minute before trying again (5 calls/minute limit).")
-        return pd.DataFrame()
     except Exception as e:
-        st.error(f"Unexpected error during data fetching: {str(e)}")
+        st.error(f"Error fetching data: {str(e)}")
         return pd.DataFrame()
 
 try:
@@ -516,62 +499,197 @@ try:
                             line=dict(color='red')
                         ))
                         
-                        # Add confidence interval
+                        # Add prediction intervals
                         fig.add_trace(go.Scatter(
                             x=pd.concat([forecast_dates, forecast_dates[::-1]]),
                             y=pd.concat([upper_bound, lower_bound[::-1]]),
                             fill='toself',
                             fillcolor='rgba(255,0,0,0.2)',
-                            line=dict(color='rgba(255,0,0,0)'),
-                            hoverinfo="skip",
-                            showlegend=False
+                            line=dict(color='rgba(255,255,255,0)'),
+                            name='Prediction Interval'
                         ))
                         
                         fig.update_layout(
-                            title=f"{selected_pair} {price_column} Price Forecast (Next 7 Days)",
-                            yaxis_title=f"{price_column} Price",
+                            title=f"7-Day {price_column} Price Forecast",
                             xaxis_title="Date",
+                            yaxis_title="Price",
                             template="plotly_dark"
                         )
                         
                         st.plotly_chart(fig, use_container_width=True)
                         
-                        # Show forecast metrics
-                        current_price = data[price_column].iloc[-1]
-                        next_day_pred = forecast['yhat'].iloc[-7]
-                        pred_change = ((next_day_pred / current_price) - 1) * 100
-                        
-                        col1, col2, col3 = st.columns(3)
-                        
-                        with col1:
-                            st.metric(
-                                f"Current {price_column}",
-                                f"{current_price:.4f}"
-                            )
-                        
-                        with col2:
-                            st.metric(
-                                f"Next Day {price_column} Forecast",
-                                f"{next_day_pred:.4f}",
-                                delta=f"{pred_change:.2f}%"
-                            )
-                        
-                        with col3:
-                            confidence = predictor.get_confidence_score(forecast, current_price)
-                            st.metric(
-                                "Forecast Confidence",
-                                f"{confidence:.1%}"
-                            )
-                        
                         # Show forecast table
-                        st.subheader("7-Day Forecast")
+                        st.subheader("Forecast Details")
+                        
+                        # Convert forecast to DataFrame for display
                         forecast_table = pd.DataFrame({
-                            'Date': forecast_dates.dt.date,
-                            'Forecast': forecast_values.values.round(4),
-                            'Lower Bound': lower_bound.values.round(4),
-                            'Upper Bound': upper_bound.values.round(4)
+                            'Date': forecast_dates.dt.strftime('%Y-%m-%d'),
+                            'Forecast': forecast_values,
+                            'Lower Bound': lower_bound,
+                            'Upper Bound': upper_bound
                         })
+                        
                         st.dataframe(forecast_table)
+                        
+                        # Advanced Prophet-based Trading Signals
+                        st.subheader("Prophet-Enhanced Trading Signals")
+                        
+                        try:
+                            # Import the SignalGenerator class
+                            from signal_generator import SignalGenerator, SignalType
+                            
+                            # Initialize the signal generator
+                            signal_generator = SignalGenerator(confidence_threshold=0.7)
+                            
+                            # Create a copy of the data to avoid modifying the original
+                            signal_data = data.copy()
+                            
+                            # Generate signals based on Prophet forecast
+                            latest_forecast = forecast.iloc[-1]
+                            current_price = signal_data[price_column].iloc[-1]
+                            predicted_price = latest_forecast['yhat']
+                            
+                            # Ensure data has required columns
+                            required_columns = ['Breakout', 'Weekly_VWAP', 'ATR']
+                            missing_columns = [col for col in required_columns if col not in signal_data.columns]
+                            
+                            if missing_columns:
+                                st.warning(f"Missing required columns for advanced signals: {', '.join(missing_columns)}")
+                                st.info("Adding placeholder values for missing indicators...")
+                                
+                                # Add placeholders for missing columns
+                                if 'Weekly_VWAP' not in signal_data.columns:
+                                    signal_data['Weekly_VWAP'] = signal_data['Close'].rolling(window=5).mean()
+                                
+                                if 'Breakout' not in signal_data.columns:
+                                    # Simple breakout calculation
+                                    signal_data['Resistance'] = signal_data['High'].rolling(window=20).max()
+                                    signal_data['Support'] = signal_data['Low'].rolling(window=20).min()
+                                    signal_data['Breakout'] = 0
+                                    # Only calculate breakouts if Resistance and Support are available
+                                    if 'Resistance' in signal_data.columns and 'Support' in signal_data.columns:
+                                        try:
+                                            signal_data.loc[signal_data['Close'] > signal_data['Resistance'].shift(1), 'Breakout'] = 1
+                                            signal_data.loc[signal_data['Close'] < signal_data['Support'].shift(1), 'Breakout'] = -1
+                                        except Exception as breakout_error:
+                                            st.warning(f"Could not calculate breakouts: {str(breakout_error)}")
+                                
+                                if 'ATR' not in signal_data.columns:
+                                    # Simple ATR approximation using daily range
+                                    signal_data['ATR'] = (signal_data['High'] - signal_data['Low']).rolling(window=14).mean()
+                            
+                            # Show debug of prepared data
+                            with st.expander("Debug Signal Data", expanded=False):
+                                st.write("Data columns:", signal_data.columns.tolist())
+                                for col in required_columns:
+                                    if col in signal_data.columns:
+                                        st.write(f"{col} stats: ", {
+                                            'mean': signal_data[col].mean(),
+                                            'std': signal_data[col].std(),
+                                            'nan_count': signal_data[col].isna().sum()
+                                        })
+                            
+                            # Generate the signal
+                            signal = signal_generator.generate_signal(
+                                signal_data,
+                                forecast,
+                                sentiment_score=None  # Could be added later with NLP
+                            )
+                            
+                            # Display the signal
+                            signal_emoji = "🟢" if signal['signal_type'] == SignalType.BUY else "🔴" if signal['signal_type'] == SignalType.SELL else "⚪"
+                            st.success(f"### {signal['signal_type']} Signal {signal_emoji}")
+                            st.info(f"**Reason:** {signal['reason']}")
+                            
+                            # Display Prophet-based Entry, TP, and SL
+                            col1, col2, col3 = st.columns(3)
+                            with col1:
+                                st.metric(
+                                    "Prophet Entry Price",
+                                    f"{signal['current_price']:.4f}",
+                                    help="Current price as entry point"
+                                )
+                            with col2:
+                                st.metric(
+                                    "Prophet Take Profit",
+                                    f"{signal['take_profit']:.4f}" if signal['take_profit'] else "N/A",
+                                    delta=f"{(signal['take_profit'] - signal['current_price']) if signal['take_profit'] else 0:.4f}",
+                                    help="Take profit level based on ATR and forecast"
+                                )
+                            with col3:
+                                st.metric(
+                                    "Prophet Stop Loss",
+                                    f"{signal['stop_loss']:.4f}" if signal['stop_loss'] else "N/A",
+                                    delta=f"{(signal['stop_loss'] - signal['current_price']) if signal['stop_loss'] else 0:.4f}",
+                                    help="Stop loss level based on ATR"
+                                )
+                            
+                            # Show confidence and predicted price
+                            col1, col2 = st.columns(2)
+                            with col1:
+                                st.metric(
+                                    "Signal Confidence",
+                                    f"{signal['confidence_score']:.1%}",
+                                    help="Combined confidence from technical indicators and Prophet"
+                                )
+                            with col2:
+                                st.metric(
+                                    "Predicted Price (7 Days)",
+                                    f"{signal['predicted_price']:.4f}",
+                                    delta=f"{(signal['predicted_price'] - signal['current_price']):.4f}",
+                                    help="Prophet's 7-day price prediction"
+                                )
+                            
+                            # Calculate and display risk-reward ratio
+                            if signal['signal_type'] == SignalType.BUY and signal['take_profit'] and signal['stop_loss']:
+                                risk = signal['current_price'] - signal['stop_loss']
+                                reward = signal['take_profit'] - signal['current_price']
+                                risk_reward = abs(reward / risk) if risk != 0 else 0
+                                st.metric("Risk-Reward Ratio", f"{risk_reward:.2f}", help="Ratio of potential reward to risk")
+                            elif signal['signal_type'] == SignalType.SELL and signal['take_profit'] and signal['stop_loss']:
+                                risk = signal['stop_loss'] - signal['current_price']
+                                reward = signal['current_price'] - signal['take_profit']
+                                risk_reward = abs(reward / risk) if risk != 0 else 0
+                                st.metric("Risk-Reward Ratio", f"{risk_reward:.2f}", help="Ratio of potential reward to risk")
+                            
+                            # Show forecast vs technical indicators comparison
+                            st.subheader("Signal Analysis")
+                            st.write("This signal combines both technical indicators and Prophet forecasts:")
+                            
+                            col1, col2 = st.columns(2)
+                            with col1:
+                                st.markdown("**Prophet Analysis:**")
+                                st.markdown(f"- Forecast Direction: {'Up ⬆️' if signal['predicted_price'] > signal['current_price'] else 'Down ⬇️'}")
+                                st.markdown(f"- Forecast Magnitude: {abs(signal['predicted_price'] - signal['current_price']) / signal['current_price']:.2%}")
+                                st.markdown(f"- Forecast Confidence: {signal_generator._get_prophet_confidence(latest_forecast, signal['current_price']):.1%}")
+                            
+                            with col2:
+                                st.markdown("**Technical Analysis:**")
+                                st.markdown(f"- RSI: {data['RSI'].iloc[-1]:.1f} ({'Oversold 🟢' if data['RSI'].iloc[-1] < 30 else 'Overbought 🔴' if data['RSI'].iloc[-1] > 70 else 'Neutral ⚪'})")
+                                macd = data['MACD'].iloc[-1]
+                                macd_signal = data['MACD_Signal'].iloc[-1]
+                                st.markdown(f"- MACD Signal: {'Bullish 🟢' if macd > macd_signal else 'Bearish 🔴'}")
+                                price = data['Close'].iloc[-1]
+                                bb_upper = data['Bollinger_Upper'].iloc[-1]
+                                bb_lower = data['Bollinger_Lower'].iloc[-1]
+                                bb_position = (price - bb_lower) / (bb_upper - bb_lower) if (bb_upper - bb_lower) > 0 else 0.5
+                                st.markdown(f"- Bollinger Position: {bb_position:.2f} ({'Upper Band 🔴' if bb_position > 0.8 else 'Lower Band 🟢' if bb_position < 0.2 else 'Middle ⚪'})")
+                                
+                            # Trading checklist
+                            st.markdown("### Pre-Trade Checklist")
+                            checklist = """
+                            - [ ] Verify that Prophet forecast aligns with technical indicators
+                            - [ ] Check current market conditions and news
+                            - [ ] Calculate position size based on risk management
+                            - [ ] Set stop loss and take profit orders at recommended levels
+                            - [ ] Check for upcoming market-moving events
+                            - [ ] Ensure sufficient account balance for the trade
+                            """
+                            st.markdown(checklist)
+                            
+                        except Exception as e:
+                            st.error(f"Error generating Prophet-based signals: {str(e)}")
+                            st.info("The basic trading signals below may still be available.")
                         
                     except Exception as e:
                         st.error(f"Error generating forecast: {str(e) if str(e) else 'Unknown error'}")
@@ -596,8 +714,8 @@ try:
             else:
                 st.info("Click 'Generate Prophet Forecast' to create a 7-day price prediction using Facebook Prophet.")
 
-            # Trading signals section
-            st.subheader("Trading Signals")
+            # Original Trading signals section from data_collector
+            st.subheader("Technical Indicator Trading Signals")
             
             # Check if signals exist in the data
             if 'Signal' not in data.columns:

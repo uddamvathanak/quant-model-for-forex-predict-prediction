@@ -168,6 +168,14 @@ class ForexDataCollector:
                 data['Close'], timeperiod=20
             )
             
+            # Add Weekly VWAP (Volume Weighted Average Price)
+            # For Forex, we don't have volume, so use a simple 5-day moving average
+            data['Weekly_VWAP'] = data['Close'].rolling(window=5).mean()
+            
+            # Add Support and Resistance for Breakout detection
+            data['Resistance'] = data['High'].rolling(window=20).max()
+            data['Support'] = data['Low'].rolling(window=20).min()
+            
             # Volume handling (we don't have volume for forex from Alpha Vantage)
             if 'Volume' not in data.columns:
                 data['Volume'] = 0
@@ -237,14 +245,27 @@ class ForexDataCollector:
         """
         if data is None or data.empty:
             return pd.DataFrame()
+        
+        # Make sure Resistance and Support columns exist
+        if 'Resistance' not in data.columns or 'Support' not in data.columns:
+            print("Calculating Support and Resistance levels for breakout detection")
+            # Calculate Resistance and Support if they don't exist
+            data['Resistance'] = data['High'].rolling(window=window).max()
+            data['Support'] = data['Low'].rolling(window=window).min()
             
+        # Initialize Breakout column if needed
         data['Breakout'] = 0  # 0: No breakout, 1: Bullish breakout, -1: Bearish breakout
         
-        # Bullish breakout
-        data.loc[data['Close'] > data['Resistance'].shift(1), 'Breakout'] = 1
-        
-        # Bearish breakout
-        data.loc[data['Close'] < data['Support'].shift(1), 'Breakout'] = -1
+        try:
+            # Bullish breakout
+            data.loc[data['Close'] > data['Resistance'].shift(1), 'Breakout'] = 1
+            
+            # Bearish breakout
+            data.loc[data['Close'] < data['Support'].shift(1), 'Breakout'] = -1
+        except Exception as e:
+            print(f"Error calculating breakouts: {str(e)}")
+            # Fallback: set all to 0 (no breakout)
+            data['Breakout'] = 0
         
         return data
     
