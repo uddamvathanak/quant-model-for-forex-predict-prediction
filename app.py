@@ -42,33 +42,40 @@ selected_pair = st.sidebar.selectbox(
     currency_pairs
 )
 
-# Timeframe selection - only daily for simplicity
-selected_timeframe = "daily"
+# Timeframe selection
+selected_timeframe = st.sidebar.selectbox(
+    "Select Timeframe",
+    ["45min", "daily", "weekly", "monthly"],
+    help="45-minute data is sourced from HistData.com, other intervals from Alpha Vantage"
+)
 
-# Date range selection - increase the default range
+# Date range selection - adjust based on timeframe
 end_date = datetime.now()
-start_date = end_date - timedelta(days=365)  # Default to 1 year instead of 100 days
+if selected_timeframe == "45min":
+    start_date = end_date - timedelta(days=30)  # Default to 30 days for intraday data
+    min_date = end_date - timedelta(days=90)    # Allow up to 90 days historical intraday data
+else:
+    start_date = end_date - timedelta(days=365)  # Default to 1 year
+    min_date = end_date - timedelta(days=730)    # Allow up to 2 years historical data
 
-# Add date range selector with a limit of 2 years
-min_date = end_date - timedelta(days=730)  # Allow up to 2 years historical data
-
+# Add date range selector
 date_range = st.sidebar.date_input(
     "Select Date Range",
     value=(start_date, end_date),
     min_value=min_date,
     max_value=end_date,
-    help="For reliable forecasting, select at least 60 days of data. More data generally improves forecast accuracy."
+    help="For 45-minute data, maximum range is 90 days. For daily data, maximum range is 2 years."
 )
 
 # Add API usage info
 st.sidebar.markdown("---")
 st.sidebar.markdown("""
-### API Usage Notes
-- Using Alpha Vantage API
-- Free tier allows 5 API calls per minute
-- 500 API calls per day
-- Daily data is available for long periods
-- Requires API key in .env file
+### Data Source Info
+- 45-minute data: HistData.com (free, no API key needed)
+- Daily/Weekly/Monthly: Alpha Vantage API
+  - Free tier: 5 API calls per minute
+  - 500 API calls per day
+  - Requires API key in .env file
 """)
 
 # Initialize data collector and predictor

@@ -35,13 +35,19 @@ class ForexDataCollector:
             raise ValueError("Alpha Vantage API key not found in .env file")
             
     def _convert_interval(self, interval):
-        """Convert interval to Alpha Vantage format"""
+        """Convert interval string to Alpha Vantage format"""
         interval_map = {
-            "daily": "Daily",
-            "weekly": "Weekly",
-            "monthly": "Monthly"
+            'daily': 'Daily',
+            'weekly': 'Weekly',
+            'monthly': 'Monthly',
+            '1min': '1min',
+            '5min': '5min',
+            '15min': '15min',
+            '30min': '30min',
+            '45min': '45min',  # New interval
+            '60min': '60min'
         }
-        return interval_map.get(interval, "Daily")
+        return interval_map.get(interval.lower(), 'Daily')
             
     def fetch_forex_data(self, start_date=None, end_date=None):
         """
@@ -433,3 +439,127 @@ class ForexDataCollector:
             print(f"Error calculating trading signals: {str(e)}")
         
         return data 
+
+    def _fetch_histdata_minute_data(self, start_date=None, end_date=None):
+        """
+        Fetch 1-minute data from HistData.com and aggregate to desired interval
+        
+        Parameters:
+        -----------
+        start_date : datetime, optional
+            Start date for data fetch
+        end_date : datetime, optional
+            End date for data fetch
+            
+        Returns:
+        --------
+        pd.DataFrame
+            DataFrame with OHLCV data at the specified interval
+        """
+        try:
+            import requests
+            from io import StringIO
+            import zipfile
+            from datetime import datetime, timedelta
+            
+            # Format currency pair for HistData URL (e.g., EUR/USD -> EURUSD)
+            pair = f"{self.base_currency}{self.quote_currency}"
+            
+            # If no dates provided, get last 30 days
+            if start_date is None:
+                start_date = datetime.now() - timedelta(days=30)
+            if end_date is None:
+                end_date = datetime.now()
+                
+            # Create list of months to download
+            months = []
+            current = start_date.replace(day=1)
+            while current <= end_date:
+                months.append(current)
+                current = (current + timedelta(days=32)).replace(day=1)
+            
+            all_data = []
+            
+            for date in months:
+                # Format URL for HistData
+                year = date.strftime("%Y")
+                month = date.strftime("%m")
+                url = f"https://www.histdata.com/download-free-forex-historical-data/?/ascii/{pair}_ASCII/1_MINUTE_QUOTES/{year}/{month}"
+                
+                try:
+                    # Download and process data
+                    response = requests.get(url)
+                    if response.status_code == 200:
+                        # Process the CSV data
+                        df = pd.read_csv(StringIO(response.text), 
+                                       names=['DateTime', 'Open', 'High', 'Low', 'Close', 'Volume'],
+                                       parse_dates=['DateTime'])
+                        
+                        # Filter by date range
+                        df = df[(df['DateTime'] >= start_date) & (df['DateTime'] <= end_date)]
+                        
+                        all_data.append(df)
+                        
+                except Exception as e:
+                    print(f"Error downloading data for {year}-{month}: {str(e)}")
+                    continue
+            
+            if not all_data:
+                raise Exception("No data could be downloaded from HistData")
+                
+            # Combine all data
+            data = pd.concat(all_data)
+            
+            # Resample to 45-minute intervals
+            if self.interval == '45min':
+                data.set_index('DateTime', inplace=True)
+                resampled = data.resample('45T').agg({
+                    'Open': 'first',
+                    'High': 'max',
+                    'Low': 'min',
+                    'Close': 'last',
+                    'Volume': 'sum'
+                }).dropna()
+                return resampled.reset_index()
+            
+            return data
+            
+        except Exception as e:
+            print(f"Error fetching data from HistData: {str(e)}")
+            return None
+    
+    def fetch_data(self, start_date=None, end_date=None):
+        """
+        Fetch forex data for the specified currency pair and interval
+        
+        Parameters:
+        -----------
+        start_date : str or datetime, optional
+            Start date for data fetch (default: None)
+        end_date : str or datetime, optional
+            End date for data fetch (default: None)
+            
+        Returns:
+        --------
+        pd.DataFrame
+            DataFrame with OHLCV data
+        """
+        try:
+            # Convert dates to datetime if they're strings
+            if isinstance(start_date, str):
+                start_date = pd.to_datetime(start_date)
+            if isinstance(end_date, str):
+                end_date = pd.to_datetime(end_date)
+            
+            # For intraday data (45min), use HistData
+            if self.interval == '45min':
+                data = self._fetch_histdata_minute_data(start_date, end_date)
+                if data is not None:
+                    return data
+                    
+            # Fallback to Alpha Vantage for other intervals
+            # ... existing Alpha Vantage code ...
+            
+        except Exception as e:
+            print(f"Error fetching data: {str(e)}")
+            return None 
